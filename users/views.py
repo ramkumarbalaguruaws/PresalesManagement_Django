@@ -449,8 +449,34 @@ def save_column_preferences(request):
     return render(request, "users/save_column_preferences.html")
 
 
+@login_required
 def export_proposals_csv(request):
-    return render(request, "users/export_proposals_csv.html")
+    from django.db.models import Q
+
+    # Get filter parameters from request
+    start_date = request.GET.get("start_date")
+    end_date = request.GET.get("end_date")
+    sales_director = request.GET.get("sales_director")
+    country = request.GET.get("country")
+    status = request.GET.get("status")
+
+    # Get base queryset
+    proposals = get_queryset_for_user(Proposal, request)
+
+    # Apply filters
+    if start_date:
+        proposals = proposals.filter(submission_date__gte=start_date)
+    if end_date:
+        proposals = proposals.filter(submission_date__lte=end_date)
+    if sales_director:
+        proposals = proposals.filter(sales_director=sales_director)
+    if country:
+        proposals = proposals.filter(project__country=country)
+    if status:
+        proposals = proposals.filter(status=status)
+
+    # Export to CSV using model method
+    return Proposal.export_to_csv(proposals)
 
 
 from django.http import JsonResponse

@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: presales_db
+    environment:
+      MYSQL_DATABASE: presales
+      MYSQL_USER: presales
+      MYSQL_PASSWORD: presales_password
+      MYSQL_ROOT_PASSWORD: root_password
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - presales_network
+
+  web:
+    build: .
+    container_name: presales_web
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DJANGO_SETTINGS_MODULE=presales.settings.production
+    networks:
+      - presales_network
+
+volumes:
+  db_data:
+
+networks:
+  presales_network:
+    driver: bridge

@@ -18,6 +18,8 @@ A Django-based web application for managing presales proposals, customers, proje
 
 ## Installation
 
+### Development Setup
+
 1. Clone the repository:
 ```bash
 git clone https://github.com/ramkumarbalaguruaws/PresalesManagement_Django.git
@@ -48,6 +50,56 @@ python manage.py createsuperuser
 6. Run development server:
 ```bash
 python manage.py runserver
+```
+
+### Production Deployment with Docker
+
+1. Install Docker and Docker Compose on your server
+
+2. Clone the repository:
+```bash
+git clone https://github.com/ramkumarbalaguruaws/PresalesManagement_Django.git
+cd PresalesManagement_Django
+```
+
+3. Create .env file with production settings:
+```bash
+echo "MYSQL_DATABASE=presales
+MYSQL_USER=presales
+MYSQL_PASSWORD=presales_password
+MYSQL_ROOT_PASSWORD=root_password
+DJANGO_SECRET_KEY=your-secret-key-here" > .env
+```
+
+4. Build and start containers:
+```bash
+docker-compose up -d --build
+```
+
+5. Run initial setup:
+```bash
+docker-compose exec web python manage.py migrate
+docker-compose exec web python manage.py collectstatic --noinput
+docker-compose exec web python manage.py createsuperuser
+```
+
+6. The application will be available at http://your-server-ip:8000
+
+### Updating the Application
+
+1. Pull latest changes:
+```bash
+git pull origin main
+```
+
+2. Rebuild and restart containers:
+```bash
+docker-compose up -d --build
+```
+
+3. Run migrations if needed:
+```bash
+docker-compose exec web python manage.py migrate
 ```
 
 ## Usage

@@ -4,6 +4,8 @@ from decimal import Decimal
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.core.validators import MinValueValidator, URLValidator
+import csv
+from django.http import HttpResponse
 
 
 class User(AbstractUser):
@@ -151,6 +153,51 @@ class Proposal(models.Model):
 
     def __str__(self) -> str:
         return f"{self.project.project_name} ({self.get_status_display()})"
+
+    @classmethod
+    def export_to_csv(cls, queryset):
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="proposals.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(
+            [
+                "Project",
+                "Priority",
+                "Bandwidth",
+                "Gateway",
+                "Terminal Count",
+                "Terminal Type",
+                "Sales Director",
+                "Presales Owner",
+                "Submission Date",
+                "Proposal Link",
+                "Commercial Value",
+                "Status",
+                "Remarks",
+            ]
+        )
+
+        for proposal in queryset:
+            writer.writerow(
+                [
+                    proposal.project.project_name,
+                    proposal.get_priority_display(),
+                    proposal.bandwidth,
+                    proposal.get_gateway_display(),
+                    proposal.terminal_count,
+                    proposal.get_terminal_type_display(),
+                    proposal.sales_director,
+                    proposal.presales_owner,
+                    proposal.submission_date.strftime("%Y-%m-%d"),
+                    proposal.proposal_link,
+                    str(proposal.commercial_value),
+                    proposal.get_status_display(),
+                    proposal.remarks or "",
+                ]
+            )
+
+        return response
 
 
 class Product(models.Model):
