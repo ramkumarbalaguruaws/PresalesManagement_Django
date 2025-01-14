@@ -1,0 +1,353 @@
+{% extends 'users/base.html' %}
+{% load static %}
+
+{% block title %}Proposals - Presales Management{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Initialize DataTable with configuration
+    let table; // Declare table variable at higher scope
+    
+    try {
+        const tableConfig = {
+            paging: true,
+            pageLength: 10,
+            lengthMenu: [10, 25, 50, 100],
+            dom: 'lrtip',
+            order: [[5, 'desc']],
+            columnDefs: [
+                { orderable: false, targets: [14] }, // Disable sorting for Actions column
+                { targets: [0,1,2,3,4,5,6,7,8,9,10,11,12,13], visible: true },
+                { width: '100px', targets: [14] } // Set fixed width for Actions column
+            ],
+            stateSave: true,
+            stateDuration: -1, // Use localStorage for state saving
+            initComplete: function() {
+                // Ensure table is properly initialized
+                this.api().columns.adjust().draw(false);
+            }
+        };
+
+        // Initialize DataTable with error handling
+        table = $('#proposalsTable').DataTable(tableConfig);
+        
+        // Verify table initialization
+        if (!table) {
+            throw new Error('Failed to initialize DataTable');
+        }
+    } catch (error) {
+        console.error('DataTable initialization error:', error);
+        // Fallback to basic table functionality
+        $('#proposalsTable').addClass('table').removeClass('dataTable');
+        return; // Exit if initialization failed
+    }
+
+    // Initialize column visibility controls
+    function initializeColumnVisibility() {
+        $('.column-toggle .dropdown-item').each(function() {
+            const columnIndex = $(this).data('column');
+            const column = table.column(columnIndex);
+            const isVisible = column.visible();
+            $(this).find('input').prop('checked', isVisible);
+        });
+    }
+
+    // Handle column visibility toggles
+    $('.column-toggle .dropdown-item').on('click', function(e) {
+        e.stopPropagation();
+        const columnIndex = $(this).data('column');
+        const column = table.column(columnIndex);
+        const newVisibility = !column.visible();
+        
+        column.visible(newVisibility);
+        $(this).find('input').prop('checked', newVisibility);
+        return false;
+    });
+
+    // Handle search input
+    $('#searchInput').on('keyup', function() {
+        table.search(this.value).draw();
+    });
+
+    // Handle table reset
+    $('#resetTable').on('click', function() {
+        table.search('').columns().search('').draw();
+        table.columns().every(function(index) {
+            this.visible(true);
+        });
+        $('.column-toggle input').prop('checked', true);
+        table.columns.adjust().draw(false);
+    });
+
+    // Handle apply button click
+    $('#applyColumns').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Get current visibility state
+        const visibilityState = {};
+        $('.column-toggle .dropdown-item').each(function() {
+            const columnIndex = $(this).data('column');
+            const isVisible = table.column(columnIndex).visible();
+            visibilityState[columnIndex] = isVisible;
+        });
+
+        // Save visibility state to server
+            $.ajax({
+                url: "{% url 'save_column_preferences' %}",
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
+                    'Content-Type': 'application/json'
+                },
+                data: JSON.stringify({
+                    preferences: visibilityState
+                }),
+            success: function(response) {
+                table.columns.adjust().draw(false);
+                $('.column-toggle').dropdown('hide');
+            },
+            error: function(xhr) {
+                console.error('Error saving column preferences:', xhr.responseText);
+            }
+        });
+    });
+
+    // Initialize controls
+    initializeColumnVisibility();
+
+    // Handle date range filtering
+    $.fn.dataTable.ext.search.push(
+        function(settings, data, dataIndex) {
+            const min = $('#dateFrom').val();
+            const max = $('#dateTo').val();
+            const date = data[10]; // Submission Date column
+            
+            if ((min === '' && max === '') ||
+                (min === '' && date <= max) ||
+                (min <= date && max === '') ||
+                (min <= date && date <= max)) {
+                return true;
+            }
+            return false;
+        }
+    );
+
+    $('#dateFrom, #dateTo').on('change', function() {
+        table.draw();
+    });
+
+    // Handle country filtering
+    $('#countryFilter').on('change', function() {
+        table.column(2).search(this.value).draw();
+    });
+
+    // Handle CSV export
+    $('#exportCsv').on('click', function() {
+        const params = {
+            dateFrom: $('#dateFrom').val(),
+            dateTo: $('#dateTo').val(),
+            country: $('#countryFilter').val(),
+            search: table.search()
+        };
+        
+        const queryString = Object.keys(params)
+            .filter(key => params[key])
+            .map(key => `${key}=${encodeURIComponent(params[key])}`)
+            .join('&');
+            
+        window.location.href = `{% url 'export_proposals_csv' %}?${queryString}`;
+    });
+
+    // Initialize country filter options
+    const countries = [...new Set(table.column(2).data().toArray())];
+    const countrySelect = $('#countryFilter');
+    countries.sort().forEach(country => {
+        if (country) {
+            countrySelect.append(`<option value="${country}">${country}</option>`);
+        }
+    });
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>Proposals</h1>
+        </div>
+    </div>
+
+    <!-- Proposal List -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Proposals</h5>
+            <div class="btn-group">
+                <a href="{% url 'create_proposal' %}" class="btn btn-success btn-sm">
+                    <i class="fas fa-plus"></i> New Proposal
+                </a>
+                <a href="{% url 'export_proposals_csv' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-file-csv"></i> Export
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <div class="row">
+                    <div class="col-md-3">
+                        <input type="text" id="searchInput" class="form-control" placeholder="Search proposals...">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="date" id="dateFrom" class="form-control" placeholder="From date">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="date" id="dateTo" class="form-control" placeholder="To date">
+                    </div>
+                    <div class="col-md-2">
+                        <select id="countryFilter" class="form-select">
+                            <option value="">All Countries</option>
+                            {% for country in countries %}
+                            <option value="{{ country }}">{{ country }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 text-end">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-columns"></i> Columns
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end column-toggle">
+                                <li><a class="dropdown-item" href="#" data-column="0"><input type="checkbox" checked> Project</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="1"><input type="checkbox" checked> Priority</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="2"><input type="checkbox" checked> Country</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="3"><input type="checkbox" checked> Bandwidth</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="4"><input type="checkbox" checked> Gateway</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="5"><input type="checkbox" checked> Terminal Count</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="6"><input type="checkbox" checked> Terminal Type</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="7"><input type="checkbox" checked> Customer</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="8"><input type="checkbox" checked> Sales Director</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="9"><input type="checkbox" checked> Presales Owner</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="10"><input type="checkbox" checked> Submission Date</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="11"><input type="checkbox" checked> Proposal Link</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="12"><input type="checkbox" checked> Value</a></li>
+                                <li><a class="dropdown-item" href="#" data-column="13"><input type="checkbox" checked> Status</a></li>
+                                <li class="dropdown-divider"></li>
+                                <li>
+                                    <button class="dropdown-item" id="applyColumns">
+                                        <i class="fas fa-check"></i> Apply
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                        <button class="btn btn-outline-secondary" id="resetTable">
+                            <i class="fas fa-sync"></i> Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover" id="proposalsTable">
+                    <thead>
+                        <tr>
+                            <th>Project</th>
+                            <th>Priority</th>
+                            <th>Country</th>
+                            <th>Bandwidth</th>
+                            <th>Gateway</th>
+                            <th>Terminal Count</th>
+                            <th>Terminal Type</th>
+                            <th>Customer</th>
+                            <th>Sales Director</th>
+                            <th>Presales Owner</th>
+                            <th>Submission Date</th>
+                            <th>Proposal Link</th>
+                            <th>Value</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tfoot>
+                        <tr>
+                            <th>Project</th>
+                            <th>Priority</th>
+                            <th>Country</th>
+                            <th>Bandwidth</th>
+                            <th>Gateway</th>
+                            <th>Terminal Count</th>
+                            <th>Terminal Type</th>
+                            <th>Customer</th>
+                            <th>Sales Director</th>
+                            <th>Presales Owner</th>
+                            <th>Submission Date</th>
+                            <th>Proposal Link</th>
+                            <th>Value</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </tfoot>
+                    <tbody>
+                        {% for proposal in proposals %}
+                        <tr>
+                            <td>{{ proposal.project.project_name }}</td>
+                            <td>{{ proposal.get_priority_display }}</td>
+                            <td>{{ proposal.project.country }}</td>
+                            <td>{{ proposal.bandwidth }}</td>
+                            <td>{{ proposal.gateway }}</td>
+                            <td>{{ proposal.terminal_count }}</td>
+                            <td>{{ proposal.terminal_type }}</td>
+                            <td>{{ proposal.project.customer.name }}</td>
+                            <td>{{ proposal.sales_director }}</td>
+                            <td>{{ proposal.presales_owner }}</td>
+                            <td>{{ proposal.submission_date|date:"Y-m-d" }}</td>
+                            <td>
+                                {% if proposal.proposal_link %}
+                                <a href="{{ proposal.proposal_link }}" target="_blank">View</a>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>${{ proposal.commercial_value|floatformat:2 }}</td>
+                            <td>
+                                <span class="bg-{{ proposal.get_status_color }}" style="font-size: 1rem; color: #212529; padding: 0.25rem 0.5rem; border-radius: 0.25rem;">
+                                    {{ proposal.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{% url 'edit_proposal' proposal.pk %}" class="btn btn-sm btn-primary" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a href="{% url 'delete_proposal' proposal.pk %}" class="btn btn-sm btn-danger" title="Delete">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

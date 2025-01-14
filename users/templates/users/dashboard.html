@@ -1,0 +1,358 @@
+{% extends 'users/base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - Presales Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header mb-4">
+        <h1 class="display-4">Dashboard</h1>
+        <p class="lead">Overview of presales activities and performance metrics</p>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Filters</h5>
+                    <form method="get">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label>Start Date</label>
+                                <input type="date" name="start_date" class="form-control" value="{{ request.GET.start_date }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label>End Date</label>
+                                <input type="date" name="end_date" class="form-control" value="{{ request.GET.end_date }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label>Sales Director</label>
+                                <select name="sales_director" class="form-select">
+                                    <option value="">All</option>
+                                    {% for director in all_sales_directors %}
+                                    <option value="{{ director }}" {% if request.GET.sales_director == director %}selected{% endif %}>{{ director }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Country</label>
+                                <select name="country" class="form-select">
+                                    <option value="">All</option>
+                                    {% for country in all_countries %}
+                                    <option value="{{ country }}" {% if request.GET.country == country %}selected{% endif %}>{{ country }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-12">
+                                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Reset</a>
+                                <a href="{% url 'export_proposals_csv' %}?{{ request.GET.urlencode }}" class="btn btn-success">Export CSV</a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Summary Statistics -->
+    <div class="row mb-4 g-4">
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title text-muted mb-2">Total Proposals</h5>
+                            <h2 class="card-text display-5">{{ total_proposals }}</h2>
+                        </div>
+                        <div class="icon-circle bg-primary text-white">
+                            <i class="bi bi-file-earmark-text fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title text-muted mb-2">Blocked</h5>
+                            <h2 class="card-text display-5">{{ blocked_proposals }}</h2>
+                        </div>
+                        <div class="icon-circle bg-danger text-white">
+                            <i class="bi bi-slash-circle fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title text-muted mb-2">Ongoing</h5>
+                            <h2 class="card-text display-5">{{ ongoing_proposals }}</h2>
+                        </div>
+                        <div class="icon-circle bg-warning text-white">
+                            <i class="bi bi-hourglass-split fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title text-muted mb-2">Closed</h5>
+                            <h2 class="card-text display-5">{{ closed_proposals }}</h2>
+                        </div>
+                        <div class="icon-circle bg-success text-white">
+                            <i class="bi bi-check-circle fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="row mb-4 g-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-muted mb-3">Status Distribution</h5>
+                    <div class="chart-container" style="position: relative; height: 300px;">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-muted mb-3">Country-wise Distribution</h5>
+                    <div class="chart-container" style="position: relative; height: 300px;">
+                        <canvas id="countryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title text-muted mb-3">Sales Director Performance</h5>
+                    <div class="chart-container" style="position: relative; height: 400px;">
+                        <canvas id="salesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Chart color scheme
+    const chartColors = {
+        primary: '#4e73df',
+        success: '#1cc88a',
+        warning: '#f6c23e',
+        danger: '#e74a3b',
+        info: '#36b9cc',
+        secondary: '#858796'
+    };
+
+    // Status Distribution Chart
+    const statusCtx = document.getElementById('statusChart');
+    const statusData = JSON.parse('{{ status_distribution|escapejs }}');
+    new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+            labels: statusData.labels,
+            datasets: [{
+                label: 'Status Distribution',
+                data: statusData.values,
+                backgroundColor: [
+                    chartColors.primary,
+                    chartColors.success,
+                    chartColors.warning
+                ],
+                borderColor: '#fff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    enabled: true,
+                    mode: 'index',
+                    intersect: false
+                }
+            }
+        }
+    });
+
+    // Country-wise Distribution Chart
+    const countryCtx = document.getElementById('countryChart');
+    const countryData = JSON.parse('{{ country_distribution|escapejs }}');
+    new Chart(countryCtx, {
+        type: 'bar',
+        data: {
+            labels: countryData.labels,
+            datasets: countryData.datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    grid: {
+                        display: false
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    enabled: true,
+                    mode: 'index',
+                    intersect: false
+                }
+            }
+        }
+    });
+
+    // Sales Director Performance Chart
+    const salesCtx = document.getElementById('salesChart');
+    const salesData = JSON.parse('{{ sales_director_performance|escapejs }}');
+    
+    // Transform data for status-based bars
+    const directorStatusData = {
+        labels: salesData.labels,
+        datasets: [
+            {
+                label: 'Ongoing',
+                data: salesData.datasets[0].data,
+                backgroundColor: chartColors.warning,
+                borderColor: '#fff',
+                borderWidth: 1
+            },
+            {
+                label: 'Blocked',
+                data: salesData.datasets[1].data,
+                backgroundColor: chartColors.danger,
+                borderColor: '#fff',
+                borderWidth: 1
+            },
+            {
+                label: 'Closed',
+                data: salesData.datasets[2].data,
+                backgroundColor: chartColors.success,
+                borderColor: '#fff',
+                borderWidth: 1
+            }
+        ]
+    };
+
+    // Calculate max value based on actual data
+    const maxValue = Math.max(
+        ...directorStatusData.datasets.flatMap(dataset => dataset.data)
+    );
+
+    new Chart(salesCtx, {
+        type: 'bar',
+        data: directorStatusData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: {
+                        display: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Sales Directors'
+                    }
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    grid: {
+                        display: true,
+                        color: '#f3f3f3'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Number of Proposals'
+                    },
+                    ticks: {
+                        stepSize: 1,
+                        precision: 0,
+                        maxTicksLimit: Math.min(maxValue, 10)
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    enabled: true,
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += context.parsed.y;
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}
